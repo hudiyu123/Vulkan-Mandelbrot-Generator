@@ -23,9 +23,9 @@ void main() {
   float y = float(gl_GlobalInvocationID.y) / float(ubo.height);
 
   // Code for computing mandelbrot set.
-  const vec2 uv = vec2(x, y - 0.5) * vec2(1.0, float(ubo.height) / float(ubo.width));
-  const vec2 c = uv * 3 + vec2(-2.1, 0.0);
-  vec2 z = vec2(0.0);
+  const vec2 uv = vec2(x, y - 0.5f) * vec2(1.0f, float(ubo.height) / float(ubo.width));
+  const vec2 c = uv * 3.0f + vec2(-2.1f, 0.0f);
+  vec2 z = vec2(0.0f);
   const int m = 128;
   int n = 0;
   for (int i = 0; i < m; ++i) {
@@ -36,11 +36,11 @@ void main() {
 
   // We use a cosine palette to determine the color of pixels.
   float t = float(n) / float(m);
-  vec3 d = vec3(0.3, 0.3, 0.5);
-  vec3 e = vec3(-0.2, -0.3, -0.5);
-  vec3 f = vec3(2.1, 2.0, 3.0);
-  vec3 g = vec3(0.0, 0.1, 0.0);
-  vec4 color = vec4(d + e * cos(6.28318 * (f * t + g)), 1.0);
+  vec3 d = vec3(0.3f, 0.3f, 0.5f);
+  vec3 e = vec3(-0.2f, -0.3f, -0.5f);
+  vec3 f = vec3(2.1f, 2.0f, 3.0f);
+  vec3 g = vec3(0.0f, 0.1f, 0.0f);
+  vec4 color = vec4(d + e * cos(6.28318f * (f * t + g)), 1.0f);
 
   // Store the color data into the storage buffer.
   image[ubo.width * gl_GlobalInvocationID.y + gl_GlobalInvocationID.x] = color;

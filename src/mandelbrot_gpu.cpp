@@ -68,24 +68,30 @@ class Mandelbrot {
   int height_;
 
   vk::Instance instance_{};
+
 #ifndef NDEBUG
   vk::DebugUtilsMessengerEXT debugUtilsMessenger_{};
 #endif
+
   vk::PhysicalDevice physicalDevice_{};
   vk::Device device_{};
-  vk::Pipeline pipeline_{};
-  vk::PipelineLayout pipelineLayout_{};
-  vk::CommandPool commandPool_{};
-  vk::CommandBuffer commandBuffer_{};
-  vk::DescriptorPool descriptorPool_{};
-  std::vector<vk::DescriptorSet> descriptorSets_{};
-  vk::DescriptorSetLayout descriptorSetLayout_{};
+  vk::Queue queue_{};
+  std::uint32_t queueFamilyIndex_{};
+
   vk::Buffer storageBuffer_{};
   vk::DeviceMemory storageBufferMemory_{};
   vk::Buffer uniformBuffer_{};
   vk::DeviceMemory uniformBufferMemory_{};
-  vk::Queue queue_{};
-  std::uint32_t queueFamilyIndex_{};
+
+  vk::DescriptorSetLayout descriptorSetLayout_{};
+  vk::DescriptorPool descriptorPool_{};
+  std::vector<vk::DescriptorSet> descriptorSets_{};
+
+  vk::PipelineLayout pipelineLayout_{};
+  vk::Pipeline pipeline_{};
+
+  vk::CommandPool commandPool_{};
+  vk::CommandBuffer commandBuffer_{};
 
  public:
   Mandelbrot(int width, int height) : width_{width}, height_{height} {}
