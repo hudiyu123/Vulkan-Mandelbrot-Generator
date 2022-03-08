@@ -64,19 +64,25 @@ Vulkan_mandelbrot_generator::Vulkan_mandelbrot_generator(int width, int height)
   : width_{width}, height_{height}, workgroup_size_{8, 8} {}
 
 std::vector<unsigned char> Vulkan_mandelbrot_generator::generate() {
+  // Hardware Setup Stage
   create_instance();
 #ifndef NDEBUG
   setup_debug_utils_messenger();
 #endif
   find_physical_device();
   create_device();
+  // Resource Setup Stage
   create_buffers();
+  // Pipeline Setup Stage
   create_descriptor_set_layout();
   create_descriptor_sets();
   create_compute_pipeline();
+  // Command Execution Stage
   create_command_buffer();
   submit_command_buffer();
+  // Fetch data from VRAM to RAM.
   auto raw_image = fetch_rendered_image();
+
   cleanup();
   return raw_image;
 }

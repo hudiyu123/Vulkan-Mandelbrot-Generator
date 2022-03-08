@@ -1,6 +1,6 @@
 #version 450
 
-// We set local workgroup size via Specialization (Push) Constants.
+// We set local workgroup size via Specialization Constants.
 layout (local_size_x_id = 0, local_size_y_id = 1) in;
 
 // Otherwise, we have to hard code the workgroup size in compute shader like
