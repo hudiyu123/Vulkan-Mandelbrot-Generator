@@ -25,11 +25,13 @@ int main(int argc, char* argv[]) {
     }
 
     std::vector<unsigned char> png;
-    unsigned error = lodepng::encode(png, raw_image, width, height);
+    unsigned int error = lodepng::encode(png, raw_image, width, height);
     if (error) {
-      throw std::runtime_error{"Failed to encode image" + std::string{lodepng_error_text(error)}};
+      throw std::runtime_error{
+        "Failed to encode image" + std::string{lodepng_error_text(error)}};
     }
-    std::cout.write(reinterpret_cast<const char*>(png.data()), static_cast<std::streamsize>(png.size()));
+    std::cout.write(reinterpret_cast<const char*>(png.data()),
+      static_cast<std::streamsize>(png.size()));
     return std::cout ? 0 : 1;
   } catch (const vk::SystemError& e) {
     std::cerr << e.what() << "\n";

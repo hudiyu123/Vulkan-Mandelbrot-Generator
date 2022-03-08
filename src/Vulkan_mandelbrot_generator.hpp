@@ -12,12 +12,18 @@ class Vulkan_mandelbrot_generator {
   // Create a generator with the width and the height of the image.
   Vulkan_mandelbrot_generator(int width, int height);
 
-  // Return the raw data of mandelbrot image.
+  // Return the raw data of a mandelbrot image.
   std::vector<unsigned char> generate();
 
  private:
+  struct Workgroup_size{
+    std::uint32_t x;
+    std::uint32_t y;
+  };
+
   int width_;
   int height_;
+  Workgroup_size workgroup_size_;
 
   vk::Instance instance_{};
   vk::PhysicalDevice physical_device_{};
@@ -40,7 +46,6 @@ class Vulkan_mandelbrot_generator {
   vk::CommandPool command_pool_{};
   vk::CommandBuffer command_buffer_{};
 
-  void setup();
   std::vector<unsigned char> fetch_rendered_image();
   void cleanup();
 

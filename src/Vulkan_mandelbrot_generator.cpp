@@ -60,16 +60,10 @@ std::vector<char> read_file(const std::string& filename) {
   return buffer;
 }
 
-Vulkan_mandelbrot_generator::Vulkan_mandelbrot_generator(int width, int height) : width_{width}, height_{height} {}
+Vulkan_mandelbrot_generator::Vulkan_mandelbrot_generator(int width, int height)
+  : width_{width}, height_{height}, workgroup_size_{8, 8} {}
 
 std::vector<unsigned char> Vulkan_mandelbrot_generator::generate() {
-  setup();
-  auto raw_image = fetch_rendered_image();
-  cleanup();
-  return raw_image;
-}
-
-void Vulkan_mandelbrot_generator::setup() {
   create_instance();
 #ifndef NDEBUG
   setup_debug_utils_messenger();
@@ -82,18 +76,21 @@ void Vulkan_mandelbrot_generator::setup() {
   create_compute_pipeline();
   create_command_buffer();
   submit_command_buffer();
+  auto raw_image = fetch_rendered_image();
+  cleanup();
+  return raw_image;
 }
 
 std::vector<unsigned char> Vulkan_mandelbrot_generator::fetch_rendered_image() {
   auto count = 4 * width_ * height_;
-  auto mapped_memory = device_.mapMemory(storage_buffer_memory_, 0, sizeof(float) * count, {});
+  auto mapped_memory = device_.mapMemory(
+    storage_buffer_memory_, 0, sizeof(float) * count, {});
   auto data = static_cast<float *>(mapped_memory);
 
   std::vector<unsigned char> image(count, 0);
   // Transform data from [0.0f, 1.0f] (float) to [0, 255] (unsigned char).
-  std::transform(std::execution::par_unseq, data, data + count, image.begin(), [](auto value){
-    return static_cast<unsigned char>(255.0f * value);
-  });
+  std::transform(std::execution::par_unseq, data, data + count, image.begin(),
+    [](auto value){ return static_cast<unsigned char>(255.0f * value); });
 
   device_.unmapMemory(storage_buffer_memory_);
   return image;
@@ -126,7 +123,8 @@ void Vulkan_mandelbrot_generator::create_instance() {
 
 #ifndef NDEBUG
   auto layer_properties = vk::enumerateInstanceLayerProperties();
-  auto found_validation_layer = std::ranges::any_of(layer_properties, [](const auto& property) {
+  auto found_validation_layer = std::ranges::any_of(layer_properties,
+    [](const auto& property) {
     return std::strcmp("VK_LAYER_KHRONOS_validation", property.layerName) == 0;
   });
   if (!found_validation_layer) {
@@ -181,14 +179,17 @@ void Vulkan_mandelbrot_generator::create_buffers() {
   std::tie(storage_buffer_, storage_buffer_memory_) = create_buffer(
     sizeof(float) * 4 * width_ * height_,
     vk::BufferUsageFlagBits::eStorageBuffer,
-    vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostVisible);
+    vk::MemoryPropertyFlagBits::eHostCoherent |
+    vk::MemoryPropertyFlagBits::eHostVisible);
 
   std::tie(uniform_buffer_, uniform_buffer_memory_) = create_buffer(
     sizeof(int) * 2,
     vk::BufferUsageFlagBits::eUniformBuffer,
-    vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostVisible);
+    vk::MemoryPropertyFlagBits::eHostCoherent |
+    vk::MemoryPropertyFlagBits::eHostVisible);
 
-  auto mapped_memory = device_.mapMemory(uniform_buffer_memory_, 0, sizeof(int) * 2);
+  auto mapped_memory = device_.mapMemory(uniform_buffer_memory_, 0,
+    sizeof(int) * 2);
   int ubo[] = {width_, height_};
   std::memcpy(mapped_memory, &ubo, sizeof(int) * 2);
   device_.unmapMemory(uniform_buffer_memory_);
@@ -229,7 +230,8 @@ void Vulkan_mandelbrot_generator::create_descriptor_sets() {
     .descriptorSetCount = 1,
     .pSetLayouts = &descriptor_set_layout_};
 
-  descriptor_sets_ = device_.allocateDescriptorSets(descriptor_set_allocate_info);
+  descriptor_sets_ = device_.allocateDescriptorSets(
+    descriptor_set_allocate_info);
 
   auto descriptor_storage_buffer_info = vk::DescriptorBufferInfo{
     .buffer = storage_buffer_,
@@ -257,30 +259,28 @@ void Vulkan_mandelbrot_generator::create_descriptor_sets() {
 }
 
 void Vulkan_mandelbrot_generator::create_compute_pipeline() {
-  auto computeShaderCode = read_file("shaders/comp.spv");
+  auto compute_shader_code = read_file("shaders/comp.spv");
   auto shader_module_create_info = vk::ShaderModuleCreateInfo{
-    .codeSize = computeShaderCode.size(),
-    .pCode = reinterpret_cast<const uint32_t*>(computeShaderCode.data())};
+    .codeSize = compute_shader_code.size(),
+    .pCode = reinterpret_cast<const uint32_t*>(compute_shader_code.data())};
 
-  auto compute_shader_module = device_.createShaderModule(shader_module_create_info);
-
-  struct Specialization_data {
-    std::uint32_t work_group_size_x;
-    std::uint32_t work_group_size_y;
-  };
+  auto compute_shader_module = device_.createShaderModule(
+    shader_module_create_info);
 
   auto specialization_map_entries = std::vector<vk::SpecializationMapEntry>{
-    {.constantID = 0, .offset = offsetof(Specialization_data, work_group_size_x), .size = sizeof(std::uint32_t)},
-    {.constantID = 1, .offset = offsetof(Specialization_data, work_group_size_y), .size = sizeof(std::uint32_t)},
-  };
-
-  auto specialization_data = Specialization_data{4, 4};
+    {.constantID = 0,
+     .offset = offsetof(Workgroup_size, x),
+     .size = sizeof(std::uint32_t)},
+    {.constantID = 1,
+     .offset = offsetof(Workgroup_size, y),
+     .size = sizeof(std::uint32_t)}};
 
   auto specialization_info = vk::SpecializationInfo{
-    .mapEntryCount = static_cast<std::uint32_t>(specialization_map_entries.size()),
+    .mapEntryCount = static_cast<std::uint32_t>(
+      specialization_map_entries.size()),
     .pMapEntries = specialization_map_entries.data(),
-    .dataSize = sizeof(Specialization_data),
-    .pData = &specialization_data};
+    .dataSize = sizeof(Workgroup_size),
+    .pData = &workgroup_size_};
 
   auto shader_stage_create_info = vk::PipelineShaderStageCreateInfo{
     .stage = vk::ShaderStageFlagBits::eCompute,
@@ -288,17 +288,18 @@ void Vulkan_mandelbrot_generator::create_compute_pipeline() {
     .pName = "main",
     .pSpecializationInfo = &specialization_info};
 
-  auto layout_create_info = vk::PipelineLayoutCreateInfo{
+  auto pipeline_layout_create_info = vk::PipelineLayoutCreateInfo{
     .setLayoutCount = 1,
     .pSetLayouts = &descriptor_set_layout_};
 
-  pipeline_layout_ = device_.createPipelineLayout(layout_create_info);
+  pipeline_layout_ = device_.createPipelineLayout(pipeline_layout_create_info);
 
   auto compute_pipeline_create_info = vk::ComputePipelineCreateInfo{
     .stage = shader_stage_create_info,
     .layout = pipeline_layout_};
 
-  auto create_infos = std::vector<vk::ComputePipelineCreateInfo>{compute_pipeline_create_info};
+  auto create_infos = std::vector<vk::ComputePipelineCreateInfo>{
+    compute_pipeline_create_info};
   pipeline_ = device_.createComputePipelines({}, create_infos).value.front();
 
   device_.destroyShaderModule(compute_shader_module);
@@ -315,15 +316,21 @@ void Vulkan_mandelbrot_generator::create_command_buffer() {
     .level = vk::CommandBufferLevel::ePrimary,
     .commandBufferCount = 1};
 
-  command_buffer_ = device_.allocateCommandBuffers(command_buffer_allocate_info).front();
+  command_buffer_ = device_.allocateCommandBuffers(command_buffer_allocate_info)
+    .front();
 
   auto command_buffer_begin_info = vk::CommandBufferBeginInfo{
     .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit};
 
   command_buffer_.begin(command_buffer_begin_info);
   command_buffer_.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline_);
-  command_buffer_.bindDescriptorSets(vk::PipelineBindPoint::eCompute, pipeline_layout_, 0, descriptor_sets_, {});
-  command_buffer_.dispatch(width_, height_, 1);
+  command_buffer_.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
+    pipeline_layout_, 0, descriptor_sets_, {});
+  auto num_workgroup_x = static_cast<std::uint32_t>(std::ceil(
+    static_cast<float>(width_) / static_cast<float>(workgroup_size_.x)));
+  auto num_workgroup_y = static_cast<std::uint32_t>(std::ceil(
+    static_cast<float>(height_) / static_cast<float>(workgroup_size_.y)));
+  command_buffer_.dispatch(num_workgroup_x, num_workgroup_y, 1);
   command_buffer_.end();
 }
 
@@ -336,7 +343,8 @@ void Vulkan_mandelbrot_generator::submit_command_buffer() {
   auto fence = device_.createFence(fence_create_info);
 
   queue_.submit(submit_infos, fence);
-  if (device_.waitForFences(1, &fence, VK_TRUE, std::numeric_limits<std::uint32_t>::max()) != vk::Result::eSuccess) {
+  if (device_.waitForFences(1, &fence, VK_TRUE,
+    std::numeric_limits<std::uint32_t>::max()) != vk::Result::eSuccess) {
     throw std::runtime_error{"Failed to wait for fence."};
   }
 
@@ -364,20 +372,24 @@ std::uint32_t Vulkan_mandelbrot_generator::get_compute_queue_family_index() {
 
   for (std::uint32_t i = 0; i < queue_family_properties.size(); ++i) {
     auto property = queue_family_properties[i];
-    if (property.queueCount > 0 && (property.queueFlags & vk::QueueFlagBits::eCompute)) {
+    if (property.queueCount > 0 &&
+      (property.queueFlags & vk::QueueFlagBits::eCompute)) {
       return i;
     }
   }
 
-  throw std::runtime_error("could not find a queue family that supports operations");
+  throw std::runtime_error(
+    "could not find a queue family that supports operations");
 }
 
-std::uint32_t Vulkan_mandelbrot_generator::find_memory_type(std::uint32_t typeFilter,
-  vk::MemoryPropertyFlags properties) {
+std::uint32_t Vulkan_mandelbrot_generator::find_memory_type(
+  std::uint32_t typeFilter, vk::MemoryPropertyFlags properties) {
   auto memory_properties = physical_device_.getMemoryProperties();
 
   for (uint32_t i = 0; i < memory_properties.memoryTypeCount; i++) {
-    if ((typeFilter & (1 << i)) && (memory_properties.memoryTypes[i].propertyFlags & properties) == properties) {
+    if ((typeFilter & (1 << i)) &&
+      (memory_properties.memoryTypes[i].propertyFlags & properties)
+      == properties) {
       return i;
     }
   }
@@ -385,7 +397,8 @@ std::uint32_t Vulkan_mandelbrot_generator::find_memory_type(std::uint32_t typeFi
   throw std::runtime_error("failed to find suitable memory type!");
 }
 
-std::pair<vk::Buffer, vk::DeviceMemory> Vulkan_mandelbrot_generator::create_buffer(vk::DeviceSize size,
+std::pair<vk::Buffer, vk::DeviceMemory>
+Vulkan_mandelbrot_generator::create_buffer(vk::DeviceSize size,
   vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties) {
   auto buffer_create_info = vk::BufferCreateInfo{
     .size = size,
@@ -397,7 +410,8 @@ std::pair<vk::Buffer, vk::DeviceMemory> Vulkan_mandelbrot_generator::create_buff
   auto buffer_memory_requirements = device_.getBufferMemoryRequirements(buffer);
   auto allocInfo = vk::MemoryAllocateInfo{
     .allocationSize = buffer_memory_requirements.size,
-    .memoryTypeIndex = find_memory_type(buffer_memory_requirements.memoryTypeBits, properties)};
+    .memoryTypeIndex = find_memory_type(
+      buffer_memory_requirements.memoryTypeBits, properties)};
 
   auto buffer_memory = device_.allocateMemory(allocInfo);
   device_.bindBufferMemory(buffer, buffer_memory, 0);
